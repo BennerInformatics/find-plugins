@@ -7,7 +7,8 @@ function findPlugins(array $options = []) {
     $defaultOptions = [
         'keyword' => null,
         'vendorPath' => path_join(__DIR__, '../../'),
-        'cache' => null
+        'cache' => null,
+        'sort' => true
     ];
     $ignoredFolders = ['bin'];
     $options = array_merge($defaultOptions, $options);
@@ -61,12 +62,31 @@ function findPlugins(array $options = []) {
                 continue;
             }
 
-            $plugins[] = ['path' => $library->getPathname(), 'composer' => $composer];
+            $plugins[$composer['name']] = ['path' => $library->getPathname(), 'composer' => $composer];
         }
     }
 
+    if ($options['sort']) {
+        $sorter = new \MJS\TopSort\Implementations\StringSort();
+
+        foreach ($plugins as $pluginName => $plugin) {
+            $extra = $plugin['composer']['extra'] ?? [];
+            $sorter->add($pluginName, $extra['after'] ?? []);
+        }
+
+        $sortedPlugins = $sorter->sort();
+        $plugins = array_map(function ($name) use ($plugins) {
+            return $plugins[$name];
+        }, $sortedPlugins);
+    } else {
+        $plugins = array_values($plugins);
+    }
+
     if ($options['cache'] != null) {
-        mkdir($options['cache'], 0777, true);
+        if (!file_exists($options['cache'])) {
+            mkdir($options['cache'], 0777, true);
+        }
+
         $cacheFile = path_resolve($options['cache'], $PLUGIN_CACHE);
         file_put_contents($cacheFile, json_encode($plugins));
     }
